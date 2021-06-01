@@ -9,6 +9,7 @@ namespace Hooks
 	{
 		Logging* NtAllocateVirtualMemoryLog;
 		_snwprintf snwprintf = nullptr;
+	//	int i = 0;
 	}
 
 	// Original functions.
@@ -67,6 +68,13 @@ namespace Hooks
 
 		if ((size_t)BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space. 
 			return result; // return original.
+
+	//	i++;
+	//	if (i == 19)
+	//	{
+	//		int* p = 0;
+	//		*p = 0;
+	//	}
 
 		ULONG query_info_returned_length; // Initialize return length variable.
 		NtQueryInformationProcess(ProcessHandle, ProcessImageFileName, NULL, NULL, &query_info_returned_length); // Query size for the ProcessImageFileName.
