@@ -7,6 +7,40 @@ using _wcsrchr = wchar_t* (__cdecl*)(const wchar_t* Str, wchar_t Ch);
 using _snwprintf = int(__cdecl*)(wchar_t* buffer, size_t count, const wchar_t* format, ...);
 
 HANDLE our_handle = INVALID_HANDLE_VALUE;
+NTSTATUS init_status = STATUS_NOT_IMPLEMENTED;
+
+/*	UNICODE_STRING text_file;
+	OBJECT_ATTRIBUTES object_attributes;
+	IO_STATUS_BLOCK io_status;
+	HANDLE out;
+
+	const wchar_t* test_path = L"C:\\Users\\Public\\testfile.txt"; // file path.
+
+	if (!RtlDosPathNameToNtPathName_U(test_path, &text_file, NULL, NULL)) // Convert common DOS path to NT path.
+		return false;
+
+	memset(&io_status, 0, sizeof(io_status));
+	memset(&object_attributes, 0, sizeof(object_attributes));
+	object_attributes.Length = sizeof(object_attributes);
+	object_attributes.Attributes = OBJ_CASE_INSENSITIVE;
+	object_attributes.ObjectName = &text_file;
+
+	NTSTATUS status = NtCreateFile(&out, FILE_GENERIC_WRITE, &object_attributes, &io_status, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0);
+
+	_snwprintf snwprintf = nullptr;
+
+	ANSI_STRING RoutineName;
+	RtlInitAnsiString(&RoutineName, (PSTR)"_snwprintf");
+	LdrGetProcedureAddress(ntdll_handle, &RoutineName, 0, (PVOID*)&snwprintf);
+
+	WCHAR Buffer[1024];
+	snwprintf(Buffer, RTL_NUMBER_OF(Buffer), L"Test2\n");
+
+	PPEB peb = NtCurrentPeb(); // Get PEB
+
+	status = NtWriteFile(out, NULL, NULL, NULL, &io_status, Buffer, (int)wcslen(Buffer) * 2, NULL, NULL);
+
+	NtClose(out);*/
 
 bool CheckIfWantedProcess(HANDLE ntdll_handle)
 {
@@ -78,53 +112,9 @@ bool InitializeEverything(HANDLE* ntdll_handle)
 
 extern "C"
 {
-	_declspec(dllexport) NTSTATUS Wow64LogInitialize() // wow64.dll calls this so we do our setup here to check if the process is our wanted process and do our hooks.
+	_declspec(dllexport) NTSTATUS Wow64LogInitialize() 
 	{
-		HANDLE ntdll_handle = INVALID_HANDLE_VALUE;
-
-		if (!InitializeEverything(&ntdll_handle))
-			return STATUS_NOT_IMPLEMENTED;
-
-		if (!CheckIfWantedProcess(ntdll_handle)) // Is our wanted process?
-			return STATUS_NOT_IMPLEMENTED;
-
-		UNICODE_STRING text_file;
-		OBJECT_ATTRIBUTES object_attributes;
-		IO_STATUS_BLOCK io_status;
-		HANDLE out;
-
-		const wchar_t* test_path = L"C:\\Users\\Public\\testfile.txt"; // file path.
-
-		if (!RtlDosPathNameToNtPathName_U(test_path, &text_file, NULL, NULL)) // Convert common DOS path to NT path.
-			return false;
-
-		memset(&io_status, 0, sizeof(io_status));
-		memset(&object_attributes, 0, sizeof(object_attributes));
-		object_attributes.Length = sizeof(object_attributes);
-		object_attributes.Attributes = OBJ_CASE_INSENSITIVE;
-		object_attributes.ObjectName = &text_file;
-
-		NTSTATUS status = NtCreateFile(&out, FILE_GENERIC_WRITE, &object_attributes, &io_status, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0);
-
-		_snwprintf snwprintf = nullptr;
-
-		ANSI_STRING RoutineName;
-		RtlInitAnsiString(&RoutineName, (PSTR)"_snwprintf");
-		LdrGetProcedureAddress(ntdll_handle, &RoutineName, 0, (PVOID*)&snwprintf);
-
-		WCHAR Buffer[1024];
-		snwprintf(Buffer, RTL_NUMBER_OF(Buffer), L"Test2\n");
-
-		PPEB peb = NtCurrentPeb(); // Get PEB
-
-		status = NtWriteFile(out, NULL, NULL, NULL, &io_status, Buffer, (int)wcslen(Buffer) * 2, NULL, NULL);
-
-		if (!ExecuteX86Process(ntdll_handle)) // Launch our 32-bit process.
-			return STATUS_NOT_IMPLEMENTED;
-
-		Hooks::EnableHooking(); // Hook all the functions we need!
-
-		return STATUS_SUCCESS; // Lets gooo.
+		return init_status; // STATUS_NOT_IMPLEMENT will trigger a dll unload. STATUS_SUCCESS will let our dll stay loaded.
 	}
 
 	_declspec(dllexport) NTSTATUS Wow64LogSystemService(void* unk1)
@@ -143,14 +133,33 @@ extern "C"
 	}
 }
 
-void OnProcessAttach(HMODULE module)
+__declspec(noinline) /* Prevent inline for easier debugging*/ bool OnProcessAttach(HMODULE module)
 {
-	our_handle = module;
+	our_handle = module; // Get self handle. 
+	HANDLE ntdll_handle = INVALID_HANDLE_VALUE; // Initialize ntdll handle.
+
+	if (!InitializeEverything(&ntdll_handle)) // Do all initializing here.
+		return false;
+
+	if (!CheckIfWantedProcess(ntdll_handle)) // Is our wanted process?
+		return false;
+
+	if (!ExecuteX86Process(ntdll_handle)) // Launch our 32-bit process.
+		return false;
+
+	LdrAddRefDll(LDR_ADDREF_DLL_PIN, module); // If everything succeeded make sure we can't get unloaded in any way.
+
+	Hooks::EnableHooking(); // Hook all the functions we need!
+
+	init_status = STATUS_SUCCESS; // Tell wow64.dll Wow64LogInitialize "initialized" successfully.
+
+	return true;
 }
 
-void OnProcessDetach(HMODULE module)
+__declspec(noinline) /* Prevent inline for easier debugging*/  bool OnProcessDetach(HMODULE module)
 {
-
+	Hooks::DisableHooking(); // Incase we somehow get unloaded prevent a crash.
+	return true;
 }
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved)
@@ -158,11 +167,9 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved)
 	switch (reason)
 	{
 	case DLL_PROCESS_ATTACH:
-		OnProcessAttach(module);
-		break;
+		return OnProcessAttach(module);
 	case DLL_PROCESS_DETACH:
-		OnProcessDetach(module);
-		break;
+		return OnProcessDetach(module);
 	case DLL_THREAD_ATTACH:
 		break;
 	case DLL_THREAD_DETACH:

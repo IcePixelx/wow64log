@@ -16,6 +16,14 @@ namespace Hooks
 		DetourTransactionCommit();
 	}
 
+	// Stop hooks.
+	void DisableHooking()
+	{
+		DetourTransactionBegin();
+		DetourDetach((PVOID*)&Hooks::orig_nt_allocate_virtual_memory, Hooks::hkNtAllocateVirtualMemory);
+		DetourTransactionCommit();
+	}
+
 	// Hook functions.
 	NTSTATUS NTAPI hkNtAllocateVirtualMemory(HANDLE ProcessHandle, PVOID* BaseAddress, ULONG_PTR ZeroBits, PSIZE_T RegionSize, ULONG AllocationType, ULONG Protect)
 	{
