@@ -1,9 +1,16 @@
 #include "hooks.h"
 #include "ntdll.h"
 #include <detours.h>
+#include "defines.h"
 
 namespace Hooks
 {
+	namespace
+	{
+		Logging* NtAllocateVirtualMemoryLog;
+		_snwprintf snwprintf = nullptr;
+	}
+
 	// Original functions.
 	decltype(NtAllocateVirtualMemory)* orig_nt_allocate_virtual_memory = nullptr;
 
@@ -24,13 +31,58 @@ namespace Hooks
 		DetourTransactionCommit();
 	}
 
+	NTSTATUS InitializeLogging(HANDLE ntdll_handle)
+	{
+		NTSTATUS result = STATUS_WAIT_0; 
+
+		ANSI_STRING snwprintf_ansi; // Initialize new ansi string for swnprintf.
+		RtlInitAnsiString(&snwprintf_ansi, (PSTR)"_snwprintf"); // Fill ANSI_STRING struct with a string.
+
+		result = LdrGetProcedureAddress(ntdll_handle, &snwprintf_ansi, NULL, (PVOID*)&snwprintf); // Get export for swnprintf.
+		if (!NT_SUCCESS(result)) // Did LdrGetProcedureAddress succeed?
+			return result;
+
+		/*
+		   We are initializing class instances here.
+		   Please keep in mind if you set a folder path that it isn't protected by UAC. (User Account Control or in common terms the Admin Prompt)
+		   Otherwise it will fail or you need to launch the programm as admin.
+		   We will just leak the heap because the handles only will be closed on program close.
+		*/
+
+		NtAllocateVirtualMemoryLog = (Logging*)RtlAllocateHeap(RtlProcessHeap(), NULL, sizeof(Logging)); // All heap for class instance.
+		NtAllocateVirtualMemoryLog->Setup(L"C:\\Users\\Public\\NtAllocateVirtualMemoryLog.txt"); // Create Logging class instance.
+		result = NtAllocateVirtualMemoryLog->CreateFileHandle(FILE_GENERIC_WRITE, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT); // Create file handle.
+		if (!NT_SUCCESS(result)) // Did CreateFileHandle succeed?
+			return result;
+
+		return STATUS_SUCCESS; 
+	}
+
 	// Hook functions.
 	NTSTATUS NTAPI hkNtAllocateVirtualMemory(HANDLE ProcessHandle, PVOID* BaseAddress, ULONG_PTR ZeroBits, PSIZE_T RegionSize, ULONG AllocationType, ULONG Protect)
 	{
+		SIZE_T region_size_before_call = *RegionSize; // Grab RegionSize before original modifies it.
+
 		NTSTATUS result = Hooks::orig_nt_allocate_virtual_memory(ProcessHandle, BaseAddress, ZeroBits, RegionSize, AllocationType, Protect); // call original to get BaseAddress allocation.
 
 		if ((size_t)BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space. 
 			return result; // return original.
+
+		ULONG query_info_returned_length; // Initialize return length variable.
+		NtQueryInformationProcess(ProcessHandle, ProcessImageFileName, NULL, NULL, &query_info_returned_length); // Query size for the ProcessImageFileName.
+
+		UNICODE_STRING* process_image_name = (UNICODE_STRING*)RtlAllocateHeap(RtlProcessHeap(), NULL, query_info_returned_length); // Allocate new heap for the size of the returned length.
+		NtQueryInformationProcess(ProcessHandle, ProcessImageFileName, process_image_name, query_info_returned_length, &query_info_returned_length); // Now actually query the process image name.
+
+		WCHAR log_buffer[1028]; // Initialize log buffer.
+
+		// Fill log buffer with information of our hook.
+		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"'%s' called NtAllocateVirtualMemory. BaseAddress: 0x%X, RegionSize: 0x%X, AllocationType: 0x%X, Protect: 0x%X\n",
+			process_image_name->Buffer, *BaseAddress, region_size_before_call, AllocationType, Protect);
+
+		NtAllocateVirtualMemoryLog->WriteToFile(log_buffer, (int)wcslen(log_buffer) * sizeof(wchar_t)); // Write log buffer to our file.
+
+		RtlFreeHeap(RtlProcessHeap(), NULL, process_image_name); // Free the heap for process_image_name.
 
 		PPEB peb = NtCurrentPeb(); // Get PEB.
 		PEB_LDR_DATA* peb_ldr_data = peb->Ldr; // Get peb loader data.

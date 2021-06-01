@@ -1,12 +1,8 @@
 #include "ntdll.h"
 #include "hooks.h"
-
+#include "defines.h"
 #pragma comment(linker,"/BASE:0x10000000")
 
-using _wcsrchr = wchar_t* (__cdecl*)(const wchar_t* Str, wchar_t Ch);
-using _snwprintf = int(__cdecl*)(wchar_t* buffer, size_t count, const wchar_t* format, ...);
-
-HANDLE our_handle = INVALID_HANDLE_VALUE;
 NTSTATUS init_status = STATUS_NOT_IMPLEMENTED;
 
 extern "C"
@@ -83,13 +79,9 @@ bool CheckIfWantedProcess(HANDLE ntdll_handle)
 	image_file_name = wcsrchr(peb->ProcessParameters->ImagePathName.Buffer, L'\\') + 1; // Get last \ in string + 1 to skip it.
 
 	if (wcscmp(image_file_name, L"IcyCore-Executeable.exe") == NULL) // Our wanted executeable?
-	{
 		return true;
-	}
-	else
-	{
-		return false;
-	}
+
+	return false; // Not our wanted process, return false.
 }
 
 bool ExecuteX86Process(HANDLE ntdll_handle)
@@ -124,7 +116,7 @@ bool InitializeHandles(HANDLE* ntdll_handle)
 	UNICODE_STRING ntdll_path;
 	RtlInitUnicodeString(&ntdll_path, (PWSTR)L"ntdll.dll"); // Init new unicode string for ntdll.dll.
 
-	if (!NT_SUCCESS(LdrGetDllHandle(NULL, 0, &ntdll_path, ntdll_handle))) // Get ntdll handle.
+	if (!NT_SUCCESS(LdrGetDllHandle(NULL, NULL, &ntdll_path, ntdll_handle))) // Get ntdll handle.
 		return false;
 
 	if (ntdll_handle == INVALID_HANDLE_VALUE) // Is ntdll handle valid?
@@ -133,9 +125,9 @@ bool InitializeHandles(HANDLE* ntdll_handle)
 	return true;
 }
 
-__declspec(noinline) /* Prevent inline for easier debugging*/ bool OnProcessAttach(HMODULE module)
+__declspec(noinline) /* Prevent inline for easier debugging*/
+bool OnProcessAttach(HMODULE module)
 {
-	our_handle = module; // Get self handle. 
 	HANDLE ntdll_handle = INVALID_HANDLE_VALUE; // Initialize ntdll handle.
 
 	if (!InitializeHandles(&ntdll_handle)) // Do handle initializing here.
@@ -144,19 +136,21 @@ __declspec(noinline) /* Prevent inline for easier debugging*/ bool OnProcessAtta
 	if (!CheckIfWantedProcess(ntdll_handle)) // Is our wanted process?
 		return false;
 
-	if (!ExecuteX86Process(ntdll_handle)) // Launch our 32-bit process.
-		return false;
+//	if (!ExecuteX86Process(ntdll_handle)) // Launch our 32-bit process.
+//		return false;
 
 	LdrAddRefDll(LDR_ADDREF_DLL_PIN, module); // If everything succeeded make sure we can't get unloaded in any way.
 
 	Hooks::EnableHooking(); // Hook all the functions we need!
+	Hooks::InitializeLogging(ntdll_handle);
 
 	init_status = STATUS_SUCCESS; // Tell wow64.dll Wow64LogInitialize "initialized" successfully.
 
 	return true;
 }
 
-__declspec(noinline) /* Prevent inline for easier debugging*/  bool OnProcessDetach(HMODULE module)
+__declspec(noinline) /* Prevent inline for easier debugging*/
+bool OnProcessDetach(HMODULE module)
 {
 	Hooks::DisableHooking(); // Incase we somehow get unloaded prevent a crash.
 	return true;

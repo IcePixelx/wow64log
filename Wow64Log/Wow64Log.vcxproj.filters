@@ -2,60 +2,62 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClInclude Include="Detours\MS-Detours\src\detours.h">
-      <Filter>helper\MS-Detours</Filter>
+      <Filter>helper libraries\MS-Detours</Filter>
     </ClInclude>
     <ClInclude Include="Detours\MS-Detours\src\detver.h">
-      <Filter>helper\MS-Detours</Filter>
+      <Filter>helper libraries\MS-Detours</Filter>
     </ClInclude>
     <ClInclude Include="Detours\DetoursNT.h">
-      <Filter>helper</Filter>
+      <Filter>helper libraries</Filter>
     </ClInclude>
     <ClInclude Include="ntdll.h">
-      <Filter>helper</Filter>
+      <Filter>helper libraries</Filter>
     </ClInclude>
     <ClInclude Include="hooks.h">
       <Filter>hooks</Filter>
     </ClInclude>
+    <ClInclude Include="defines.h" />
+    <ClInclude Include="logging.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Detours\MS-Detours\src\detours.cpp">
-      <Filter>helper\MS-Detours</Filter>
+      <Filter>helper libraries\MS-Detours</Filter>
     </ClCompile>
     <ClCompile Include="Detours\MS-Detours\src\disasm.cpp">
-      <Filter>helper\MS-Detours</Filter>
+      <Filter>helper libraries\MS-Detours</Filter>
     </ClCompile>
     <ClCompile Include="Detours\MS-Detours\src\disolarm.cpp">
-      <Filter>helper\MS-Detours</Filter>
+      <Filter>helper libraries\MS-Detours</Filter>
     </ClCompile>
     <ClCompile Include="Detours\MS-Detours\src\disolarm64.cpp">
-      <Filter>helper\MS-Detours</Filter>
+      <Filter>helper libraries\MS-Detours</Filter>
     </ClCompile>
     <ClCompile Include="Detours\MS-Detours\src\disolia64.cpp">
-      <Filter>helper\MS-Detours</Filter>
+      <Filter>helper libraries\MS-Detours</Filter>
     </ClCompile>
     <ClCompile Include="Detours\MS-Detours\src\disolx64.cpp">
-      <Filter>helper\MS-Detours</Filter>
+      <Filter>helper libraries\MS-Detours</Filter>
     </ClCompile>
     <ClCompile Include="Detours\MS-Detours\src\disolx86.cpp">
-      <Filter>helper\MS-Detours</Filter>
+      <Filter>helper libraries\MS-Detours</Filter>
     </ClCompile>
     <ClCompile Include="Detours\DetoursNT.cpp">
-      <Filter>helper</Filter>
+      <Filter>helper libraries</Filter>
     </ClCompile>
     <ClCompile Include="hooks.cpp">
       <Filter>hooks</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="helper">
-      <UniqueIdentifier>{53bb2bde-e731-472f-9ae3-a36f61e7d455}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="helper\MS-Detours">
-      <UniqueIdentifier>{5a948eee-42c3-44cf-be91-b15540727716}</UniqueIdentifier>
-    </Filter>
     <Filter Include="hooks">
       <UniqueIdentifier>{da28ba95-799d-4482-8b56-f8fd5a8e9c82}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="helper libraries">
+      <UniqueIdentifier>{53bb2bde-e731-472f-9ae3-a36f61e7d455}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="helper libraries\MS-Detours">
+      <UniqueIdentifier>{5a948eee-42c3-44cf-be91-b15540727716}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>
