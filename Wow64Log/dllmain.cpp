@@ -9,6 +9,29 @@ using _snwprintf = int(__cdecl*)(wchar_t* buffer, size_t count, const wchar_t* f
 HANDLE our_handle = INVALID_HANDLE_VALUE;
 NTSTATUS init_status = STATUS_NOT_IMPLEMENTED;
 
+extern "C"
+{
+	_declspec(dllexport) NTSTATUS Wow64LogInitialize()
+	{
+		return init_status; // STATUS_NOT_IMPLEMENT will trigger a dll unload. STATUS_SUCCESS will let our dll stay loaded.
+	}
+
+	_declspec(dllexport) NTSTATUS Wow64LogSystemService(void* unk1)
+	{
+		return STATUS_SUCCESS;
+	}
+
+	_declspec(dllexport) NTSTATUS Wow64LogMessageArgList(unsigned long type, char* format_string, void* arguments)
+	{
+		return STATUS_SUCCESS;
+	}
+
+	_declspec(dllexport) NTSTATUS Wow64LogTerminate()
+	{
+		return STATUS_SUCCESS;
+	}
+}
+
 /*	UNICODE_STRING text_file;
 	OBJECT_ATTRIBUTES object_attributes;
 	IO_STATUS_BLOCK io_status;
@@ -96,7 +119,7 @@ bool ExecuteX86Process(HANDLE ntdll_handle)
 	return true;
 }
 
-bool InitializeEverything(HANDLE* ntdll_handle)
+bool InitializeHandles(HANDLE* ntdll_handle)
 {
 	UNICODE_STRING ntdll_path;
 	RtlInitUnicodeString(&ntdll_path, (PWSTR)L"ntdll.dll"); // Init new unicode string for ntdll.dll.
@@ -110,35 +133,12 @@ bool InitializeEverything(HANDLE* ntdll_handle)
 	return true;
 }
 
-extern "C"
-{
-	_declspec(dllexport) NTSTATUS Wow64LogInitialize() 
-	{
-		return init_status; // STATUS_NOT_IMPLEMENT will trigger a dll unload. STATUS_SUCCESS will let our dll stay loaded.
-	}
-
-	_declspec(dllexport) NTSTATUS Wow64LogSystemService(void* unk1)
-	{
-		return STATUS_SUCCESS;
-	}
-
-	_declspec(dllexport) NTSTATUS Wow64LogMessageArgList(unsigned long type, char* format_string, void* arguments)
-	{
-		return STATUS_SUCCESS;
-	}
-
-	_declspec(dllexport) NTSTATUS Wow64LogTerminate()
-	{
-		return STATUS_SUCCESS;
-	}
-}
-
 __declspec(noinline) /* Prevent inline for easier debugging*/ bool OnProcessAttach(HMODULE module)
 {
 	our_handle = module; // Get self handle. 
 	HANDLE ntdll_handle = INVALID_HANDLE_VALUE; // Initialize ntdll handle.
 
-	if (!InitializeEverything(&ntdll_handle)) // Do all initializing here.
+	if (!InitializeHandles(&ntdll_handle)) // Do handle initializing here.
 		return false;
 
 	if (!CheckIfWantedProcess(ntdll_handle)) // Is our wanted process?
