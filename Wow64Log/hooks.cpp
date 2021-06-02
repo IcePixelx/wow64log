@@ -147,8 +147,6 @@ namespace Hooks
 		UNICODE_STRING* process_image_name = (UNICODE_STRING*)RtlAllocateHeap(RtlProcessHeap(), NULL, query_info_returned_length); // Allocate new heap for the size of the returned length.
 		NtQueryInformationProcess(ProcessHandle, ProcessImageFileName, process_image_name, query_info_returned_length, &query_info_returned_length); // Now actually query the process image name.
 
-		// check if process_image_name is csgo and then return some error code.
-
 		WCHAR log_buffer[1028]; // Initialize log buffer.
 
 		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"NtProtectVirtualMemory called for '%s'. BaseAddress: 0x%X, RegionSize: 0x%X, NewProtect: 0x%X, OldProtect: 0x%X\n",
