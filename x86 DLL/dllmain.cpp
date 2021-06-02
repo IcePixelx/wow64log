@@ -9,9 +9,14 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved)
 
 //	NTSTATUS wtf = LdrGetDllHandle(NULL, NULL, &ntdll_path, ntdll_handle); // Get ntdll handle.
 
+	SIZE_T allocation_size = 5;
+	PVOID pointer_reference = nullptr;
+
+
 	switch (reason)
 	{
 	case DLL_PROCESS_ATTACH:
+		NtAllocateVirtualMemory(reinterpret_cast<HANDLE>(-1), &pointer_reference, NULL, &allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 		break;
 	case DLL_PROCESS_DETACH:
 		break;

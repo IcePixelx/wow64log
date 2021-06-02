@@ -28,39 +28,6 @@ extern "C"
 	}
 }
 
-/*	UNICODE_STRING text_file;
-	OBJECT_ATTRIBUTES object_attributes;
-	IO_STATUS_BLOCK io_status;
-	HANDLE out;
-
-	const wchar_t* test_path = L"C:\\Users\\Public\\testfile.txt"; // file path.
-
-	if (!RtlDosPathNameToNtPathName_U(test_path, &text_file, NULL, NULL)) // Convert common DOS path to NT path.
-		return false;
-
-	memset(&io_status, 0, sizeof(io_status));
-	memset(&object_attributes, 0, sizeof(object_attributes));
-	object_attributes.Length = sizeof(object_attributes);
-	object_attributes.Attributes = OBJ_CASE_INSENSITIVE;
-	object_attributes.ObjectName = &text_file;
-
-	NTSTATUS status = NtCreateFile(&out, FILE_GENERIC_WRITE, &object_attributes, &io_status, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0);
-
-	_snwprintf snwprintf = nullptr;
-
-	ANSI_STRING RoutineName;
-	RtlInitAnsiString(&RoutineName, (PSTR)"_snwprintf");
-	LdrGetProcedureAddress(ntdll_handle, &RoutineName, 0, (PVOID*)&snwprintf);
-
-	WCHAR Buffer[1024];
-	snwprintf(Buffer, RTL_NUMBER_OF(Buffer), L"Test2\n");
-
-	PPEB peb = NtCurrentPeb(); // Get PEB
-
-	status = NtWriteFile(out, NULL, NULL, NULL, &io_status, Buffer, (int)wcslen(Buffer) * 2, NULL, NULL);
-
-	NtClose(out);*/
-
 bool CheckIfWantedProcess(HANDLE ntdll_handle)
 {
 	ANSI_STRING wcsrchr_ansi;
@@ -136,13 +103,13 @@ bool OnProcessAttach(HMODULE module)
 	if (!CheckIfWantedProcess(ntdll_handle)) // Is our wanted process?
 		return false;
 
-//	if (!ExecuteX86Process(ntdll_handle)) // Launch our 32-bit process.
-//		return false;
+	if (!ExecuteX86Process(ntdll_handle)) // Launch our 32-bit process.
+		return false;
 
 	LdrAddRefDll(LDR_ADDREF_DLL_PIN, module); // If everything succeeded make sure we can't get unloaded in any way.
 
-	Hooks::EnableHooking(); // Hook all the functions we need!
 	Hooks::InitializeLogging(ntdll_handle);
+	Hooks::EnableHooking(); // Hook all the functions we need!
 
 	init_status = STATUS_SUCCESS; // Tell wow64.dll Wow64LogInitialize "initialized" successfully.
 
