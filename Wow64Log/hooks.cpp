@@ -10,6 +10,7 @@ namespace Hooks
 		Logging* nt_allocate_virtual_memory_log;
 		Logging* nt_protect_virtual_memory_log;
 		Logging* nt_read_virtual_memory_log;
+		Logging* nt_write_virtual_memory_log;
 		_snwprintf snwprintf = nullptr;
 	//	int i = 0;
 	}
@@ -18,6 +19,7 @@ namespace Hooks
 	decltype(NtAllocateVirtualMemory)* orig_nt_allocate_virtual_memory = nullptr;
 	decltype(NtProtectVirtualMemory)* orig_nt_protect_virtual_memory = nullptr;
 	decltype(NtReadVirtualMemory)* orig_nt_read_virtual_memory = nullptr;
+	decltype(NtWriteVirtualMemory)* orig_nt_write_virtual_memory = nullptr;
 
 	// Start hooks.
 	void EnableHooking()
@@ -27,10 +29,12 @@ namespace Hooks
 		Hooks::orig_nt_allocate_virtual_memory = NtAllocateVirtualMemory;
 		Hooks::orig_nt_protect_virtual_memory = NtProtectVirtualMemory;
 		Hooks::orig_nt_read_virtual_memory = NtReadVirtualMemory;
+		Hooks::orig_nt_write_virtual_memory = NtWriteVirtualMemory;
 
 		DetourAttach((PVOID*)&Hooks::orig_nt_allocate_virtual_memory, Hooks::hkNtAllocateVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_protect_virtual_memory, Hooks::hkNtProtectVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_read_virtual_memory, Hooks::hkNtReadVirtualMemory);
+		DetourAttach((PVOID*)&Hooks::orig_nt_write_virtual_memory, Hooks::hkNtWriteVirtualMemory);
 
 		DetourTransactionCommit();
 	}
@@ -43,6 +47,7 @@ namespace Hooks
 		DetourDetach((PVOID*)&Hooks::orig_nt_allocate_virtual_memory, Hooks::hkNtAllocateVirtualMemory);
 		DetourDetach((PVOID*)&Hooks::orig_nt_protect_virtual_memory, Hooks::hkNtProtectVirtualMemory);
 		DetourDetach((PVOID*)&Hooks::orig_nt_read_virtual_memory, Hooks::hkNtReadVirtualMemory);
+		DetourDetach((PVOID*)&Hooks::orig_nt_write_virtual_memory, Hooks::hkNtWriteVirtualMemory);
 
 		DetourTransactionCommit();
 	}
@@ -80,6 +85,12 @@ namespace Hooks
 		nt_read_virtual_memory_log = (Logging*)RtlAllocateHeap(RtlProcessHeap(), NULL, sizeof(Logging)); // Allocate heap for class instance.
 		nt_read_virtual_memory_log->Setup(L"C:\\Users\\Public\\NtReadVirtualMemory.txt"); // Create Logging class instance.
 		result = nt_read_virtual_memory_log->CreateFileHandle(FILE_GENERIC_WRITE, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT); // Create file handle.
+		if (!NT_SUCCESS(result)) // Did CreateFileHandle succeed?
+			return result;
+
+		nt_write_virtual_memory_log = (Logging*)RtlAllocateHeap(RtlProcessHeap(), NULL, sizeof(Logging)); // Allocate heap for class instance.
+		nt_write_virtual_memory_log->Setup(L"C:\\Users\\Public\\NtWriteVirtualMemory.txt"); // Create Logging class instance.
+		result = nt_write_virtual_memory_log->CreateFileHandle(FILE_GENERIC_WRITE, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT); // Create file handle.
 		if (!NT_SUCCESS(result)) // Did CreateFileHandle succeed?
 			return result;
 
@@ -132,8 +143,8 @@ namespace Hooks
 		WCHAR log_buffer[1028]; // Initialize log buffer.
 
 		// Fill log buffer with information of our hook.
-		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"'NtAllocateVirtualMemory called for '%s' '%s'. BaseAddress: 0x%X, RegionSize: 0x%X, AllocationType: 0x%X, Protect: 0x%X\n",
-			process_image_name->Buffer, module_name, *BaseAddress, region_size_before_call, AllocationType, Protect);
+		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"NtAllocateVirtualMemory called for '%s' '%s'. BaseAddress: 0x%X, RegionSize: 0x%X, AllocationType: 0x%X, Protect: 0x%X, Result: 0x%X\n",
+			process_image_name->Buffer, module_name, *BaseAddress, region_size_before_call, AllocationType, Protect, result);
 
 		if (nt_allocate_virtual_memory_log) // Valid ptr?
 			nt_allocate_virtual_memory_log->WriteToFile(log_buffer, (int)wcslen(log_buffer) * sizeof(wchar_t)); // Write log buffer to our file.
@@ -160,8 +171,8 @@ namespace Hooks
 
 		WCHAR log_buffer[1028]; // Initialize log buffer.
 
-		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"NtProtectVirtualMemory called for '%s'. BaseAddress: 0x%X, RegionSize: 0x%X, NewProtect: 0x%X, OldProtect: 0x%X\n",
-			process_image_name->Buffer, *BaseAddress, region_size_before_call, NewProtect, *OldProtect);
+		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"NtProtectVirtualMemory called for '%s'. BaseAddress: 0x%X, RegionSize: 0x%X, NewProtect: 0x%X, OldProtect: 0x%X, Result: 0x%X\n",
+			process_image_name->Buffer, *BaseAddress, region_size_before_call, NewProtect, *OldProtect, result);
 
 		if (nt_protect_virtual_memory_log) // Valid ptr?
 			nt_protect_virtual_memory_log->WriteToFile(log_buffer, (int)wcslen(log_buffer) * sizeof(wchar_t)); // Write log buffer to our file.
@@ -175,8 +186,8 @@ namespace Hooks
 	{
 		NTSTATUS result = Hooks::orig_nt_read_virtual_memory(ProcessHandle, BaseAddress, Buffer, BufferSize, NumberOfBytesRead);
 
-	//	if ((DWORD)BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space some will still come through sadly..
-	//		return result; // return original.
+		if ((DWORD)BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space some will still come through sadly..
+			return result; // return original.
 
 		ULONG query_info_returned_length; // Initialize return length variable.
 		NtQueryInformationProcess(ProcessHandle, ProcessImageFileName, NULL, NULL, &query_info_returned_length); // Query size for the ProcessImageFileName.
@@ -186,13 +197,40 @@ namespace Hooks
 
 		WCHAR log_buffer[1028]; // Initialize log buffer.
 
-		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"NtReadVirtualMemory called for '%s'. BaseAddress: 0x%X, Buffer: 0x%X, BufferSize: 0x%X, NumberOfBytesRead: 0x%X\n",
-			process_image_name->Buffer, BaseAddress, Buffer, BufferSize, *NumberOfBytesRead);
+		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"NtReadVirtualMemory called for '%s'. BaseAddress: 0x%X, Buffer: 0x%X, BufferSize: 0x%X, NumberOfBytesRead: 0x%X, Result: 0x%X\n",
+			process_image_name->Buffer, BaseAddress, Buffer, BufferSize, *NumberOfBytesRead, result);
 
 		if (nt_read_virtual_memory_log) // Valid ptr?
 			nt_read_virtual_memory_log->WriteToFile(log_buffer, (int)wcslen(log_buffer) * sizeof(wchar_t)); // Write log buffer to our file.
 
 		RtlFreeHeap(RtlProcessHeap(), NULL, process_image_name); // Free the heap for process_image_name.
+
+		return result;
+	}
+
+	NTSTATUS NTAPI hkNtWriteVirtualMemory(HANDLE ProcessHandle, PVOID BaseAddress, PVOID Buffer, SIZE_T BufferSize, PSIZE_T NumberOfBytesRead)
+	{
+		NTSTATUS result = Hooks::orig_nt_write_virtual_memory(ProcessHandle, BaseAddress, Buffer, BufferSize, NumberOfBytesRead);
+
+		if ((DWORD)BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space some will still come through sadly..
+			return result; // return original.
+		
+		ULONG query_info_returned_length; // Initialize return length variable.
+		NtQueryInformationProcess(ProcessHandle, ProcessImageFileName, NULL, NULL, &query_info_returned_length); // Query size for the ProcessImageFileName.
+
+		UNICODE_STRING* process_image_name = (UNICODE_STRING*)RtlAllocateHeap(RtlProcessHeap(), NULL, query_info_returned_length); // Allocate new heap for the size of the returned length.
+		NtQueryInformationProcess(ProcessHandle, ProcessImageFileName, process_image_name, query_info_returned_length, &query_info_returned_length); // Now actually query the process image name.
+
+		WCHAR log_buffer[1028]; // Initialize log buffer.
+
+		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"NtWriteVirtualMemory called for '%s'. BaseAddress: 0x%X, Buffer: 0x%X, BufferSize: 0x%X, NumberOfBytesRead: 0x%X, Result: 0x%X\n",
+			process_image_name->Buffer, BaseAddress, Buffer, BufferSize, *NumberOfBytesRead, result);
+
+		if (nt_write_virtual_memory_log) // Valid ptr?
+			nt_write_virtual_memory_log->WriteToFile(log_buffer, (int)wcslen(log_buffer) * sizeof(wchar_t)); // Write log buffer to our file.
+
+		RtlFreeHeap(RtlProcessHeap(), NULL, process_image_name); // Free the heap for process_image_name.
+		
 
 		return result;
 	}

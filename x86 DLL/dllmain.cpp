@@ -11,14 +11,14 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved)
 
 	SIZE_T allocation_size = 5;
 	PVOID pointer_reference = (PVOID)123564;
-	PVOID yes = nullptr;
+	PVOID yes = (PVOID)656456;
 	SIZE_T test = 0;
 
 
 	switch (reason)
 	{
 	case DLL_PROCESS_ATTACH:
-		NtReadVirtualMemory(reinterpret_cast<HANDLE>(-1), pointer_reference, yes, 4, &test);
+		NtWriteVirtualMemory(reinterpret_cast<HANDLE>(-1), pointer_reference, yes, 4, &test);
 		break;
 	case DLL_PROCESS_DETACH:
 		break;
