@@ -18,7 +18,8 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved)
 	switch (reason)
 	{
 	case DLL_PROCESS_ATTACH:
-		NtWriteVirtualMemory(reinterpret_cast<HANDLE>(-1), pointer_reference, yes, 4, &test);
+		NtAllocateVirtualMemory(reinterpret_cast<HANDLE>(-1), &pointer_reference, NULL, &allocation_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+		NtFreeVirtualMemory(reinterpret_cast<HANDLE>(-1), &pointer_reference, &allocation_size, MEM_RELEASE);
 		break;
 	case DLL_PROCESS_DETACH:
 		break;
