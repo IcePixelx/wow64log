@@ -167,8 +167,6 @@ namespace Hooks
 
 	NTSTATUS NTAPI hkNtFreeVirtualMemory(HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize, ULONG FreeType)
 	{
-		SIZE_T region_size_before_call = *RegionSize; // Grab RegionSize before original modifies it.
-
 		NTSTATUS result = orig_nt_free_virtual_memory(ProcessHandle, BaseAddress, RegionSize, FreeType); // call original.
 
 		if ((DWORD)*BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space some will still come through sadly..
@@ -183,7 +181,7 @@ namespace Hooks
 		WCHAR log_buffer[1028]; // Initialize log buffer.
 
 		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"NtFreeVirtualMemory called for '%s'. BaseAddress: 0x%X, RegionSize: 0x%X, FreeType: 0x%X, Result: 0x%X\n",
-			process_image_name->Buffer, *BaseAddress, region_size_before_call, FreeType, result);
+			process_image_name->Buffer, *BaseAddress, *RegionSize, FreeType, result);
 
 		if (nt_free_virtual_memory_log) // Valid ptr?
 			nt_free_virtual_memory_log->WriteToFile(log_buffer, (int)wcslen(log_buffer) * sizeof(wchar_t)); // Write log buffer to our file.
