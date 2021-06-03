@@ -12,6 +12,7 @@ namespace Hooks
 		Logging* nt_protect_virtual_memory_log;
 		Logging* nt_read_virtual_memory_log;
 		Logging* nt_write_virtual_memory_log;
+		Logging* nt_query_virtual_memory_log;
 		_snwprintf snwprintf = nullptr;
 	//	int i = 0;
 	}
@@ -22,6 +23,7 @@ namespace Hooks
 	decltype(NtReadVirtualMemory)* orig_nt_read_virtual_memory = nullptr;
 	decltype(NtWriteVirtualMemory)* orig_nt_write_virtual_memory = nullptr;
 	decltype(NtFreeVirtualMemory)* orig_nt_free_virtual_memory = nullptr;
+	decltype(NtQueryVirtualMemory)* orig_nt_query_virtual_memory = nullptr;
 
 	// Start hooks.
 	void EnableHooking()
@@ -33,12 +35,14 @@ namespace Hooks
 		Hooks::orig_nt_read_virtual_memory = NtReadVirtualMemory;
 		Hooks::orig_nt_write_virtual_memory = NtWriteVirtualMemory;
 		Hooks::orig_nt_free_virtual_memory = NtFreeVirtualMemory;
+		Hooks::orig_nt_query_virtual_memory = NtQueryVirtualMemory;
 
 		DetourAttach((PVOID*)&Hooks::orig_nt_allocate_virtual_memory, Hooks::hkNtAllocateVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_free_virtual_memory, Hooks::hkNtFreeVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_protect_virtual_memory, Hooks::hkNtProtectVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_read_virtual_memory, Hooks::hkNtReadVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_write_virtual_memory, Hooks::hkNtWriteVirtualMemory);
+		DetourAttach((PVOID*)&Hooks::orig_nt_query_virtual_memory, Hooks::hkNtQueryVirtualMemory);
 
 		DetourTransactionCommit();
 	}
@@ -53,6 +57,7 @@ namespace Hooks
 		DetourDetach((PVOID*)&Hooks::orig_nt_protect_virtual_memory, Hooks::hkNtProtectVirtualMemory);
 		DetourDetach((PVOID*)&Hooks::orig_nt_read_virtual_memory, Hooks::hkNtReadVirtualMemory);
 		DetourDetach((PVOID*)&Hooks::orig_nt_write_virtual_memory, Hooks::hkNtWriteVirtualMemory);
+		DetourDetach((PVOID*)&Hooks::orig_nt_query_virtual_memory, Hooks::hkNtQueryVirtualMemory);
 
 		DetourTransactionCommit();
 	}
@@ -102,6 +107,12 @@ namespace Hooks
 		nt_free_virtual_memory_log = (Logging*)RtlAllocateHeap(RtlProcessHeap(), NULL, sizeof(Logging)); // Allocate heap for class instance.
 		nt_free_virtual_memory_log->Setup(L"C:\\Users\\Public\\NtFreeVirtualMemory.txt"); // Create Logging class instance.
 		result = nt_free_virtual_memory_log->CreateFileHandle(FILE_GENERIC_WRITE, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT); // Create file handle.
+		if (!NT_SUCCESS(result)) // Did CreateFileHandle succeed?
+			return result;
+
+		nt_query_virtual_memory_log = (Logging*)RtlAllocateHeap(RtlProcessHeap(), NULL, sizeof(Logging)); // Allocate heap for class instance.
+		nt_query_virtual_memory_log->Setup(L"C:\\Users\\Public\\NtQueryVirtualMemory.txt"); // Create Logging class instance.
+		result = nt_query_virtual_memory_log->CreateFileHandle(FILE_GENERIC_WRITE, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT); // Create file handle.
 		if (!NT_SUCCESS(result)) // Did CreateFileHandle succeed?
 			return result;
 
@@ -265,6 +276,33 @@ namespace Hooks
 
 		if (nt_write_virtual_memory_log) // Valid ptr?
 			nt_write_virtual_memory_log->WriteToFile(log_buffer, (int)wcslen(log_buffer) * sizeof(wchar_t)); // Write log buffer to our file.
+
+		RtlFreeHeap(RtlProcessHeap(), NULL, process_image_name); // Free the heap for process_image_name.
+
+		return result;
+	}
+
+	NTSTATUS NTAPI hkNtQueryVirtualMemory(HANDLE ProcessHandle, PVOID BaseAddress, MEMORY_INFORMATION_CLASS MemoryInformationClass, PVOID MemoryInformation, SIZE_T MemoryInformationLength, PSIZE_T ReturnLength)
+	{
+		NTSTATUS result = Hooks::orig_nt_query_virtual_memory(ProcessHandle, BaseAddress, MemoryInformationClass, MemoryInformation, MemoryInformationLength, ReturnLength);
+
+		if ((DWORD)BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space some will still come through sadly..
+			return result; // return original.
+
+		ULONG query_info_returned_length; // Initialize return length variable.
+		NtQueryInformationProcess(ProcessHandle, ProcessImageFileName, NULL, NULL, &query_info_returned_length); // Query size for the ProcessImageFileName.
+
+		UNICODE_STRING* process_image_name = (UNICODE_STRING*)RtlAllocateHeap(RtlProcessHeap(), NULL, query_info_returned_length); // Allocate new heap for the size of the returned length.
+		NtQueryInformationProcess(ProcessHandle, ProcessImageFileName, process_image_name, query_info_returned_length, &query_info_returned_length); // Now actually query the process image name.
+
+		WCHAR log_buffer[1028]; // Initialize log buffer.
+
+		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer),
+			L"NtQueryVirtualMemory called for '%s'. BaseAddress: 0x%X, MemoryInformationClass: %d, MemoryInformation: 0x%X, MemoryInformationLength: 0x%X, ReturnLength: 0x%X, Result: 0x%X\n",
+			process_image_name->Buffer, BaseAddress, MemoryInformationClass, MemoryInformation, MemoryInformationLength, ReturnLength, result);
+
+		if (nt_query_virtual_memory_log) // Valid ptr?
+			nt_query_virtual_memory_log->WriteToFile(log_buffer, (int)wcslen(log_buffer) * sizeof(wchar_t)); // Write log buffer to our file.
 
 		RtlFreeHeap(RtlProcessHeap(), NULL, process_image_name); // Free the heap for process_image_name.
 
