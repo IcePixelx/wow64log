@@ -3,6 +3,9 @@
 #include <detours.h>
 #include "defines.h"
 
+Logging* thread_log;
+_snwprintf snwprintf = nullptr;
+
 namespace Hooks
 {
 	namespace
@@ -11,9 +14,8 @@ namespace Hooks
 		Logging* nt_free_virtual_memory_log;
 		Logging* nt_protect_virtual_memory_log;
 		Logging* nt_read_virtual_memory_log;
-		Logging* nt_write_virtual_memory_log;
 		Logging* nt_query_virtual_memory_log;
-		_snwprintf snwprintf = nullptr;
+		Logging* nt_write_virtual_memory_log;
 	//	int i = 0;
 	}
 
@@ -24,6 +26,50 @@ namespace Hooks
 	decltype(NtWriteVirtualMemory)* orig_nt_write_virtual_memory = nullptr;
 	decltype(NtFreeVirtualMemory)* orig_nt_free_virtual_memory = nullptr;
 	decltype(NtQueryVirtualMemory)* orig_nt_query_virtual_memory = nullptr;
+
+	void __stdcall ThreadProc()
+	{
+		PEB32* peb32 = GetPEB32(); // Get PEB32.
+
+		while (true) // Keep thread alive.
+		{
+			_PEB_LDR_DATA32* peb_ldr_data = (_PEB_LDR_DATA32*)peb32->Ldr; // Get PEB loader data.
+			if (!peb_ldr_data) // Is peb_ldr_data valid yet?
+				continue;
+
+			LIST_ENTRY32* memory_order_module_list = &peb_ldr_data->InMemoryOrderModuleList; // Get memory module list.
+			LIST_ENTRY32* memory_order_module_list_head = memory_order_module_list; // Get start of memory module list.
+
+			PVOID ntdll_base = nullptr; // Init ptr void variable for ntdll_base.
+
+			do
+			{
+				PLDR_DATA_TABLE_ENTRY32 pldr_data_table_entry = CONTAINING_RECORD(memory_order_module_list, LDR_DATA_TABLE_ENTRY32, InMemoryOrderLinks); // Does current entry contain a record?
+
+				if (pldr_data_table_entry) // Is data table entry valid?
+				{
+					if (pldr_data_table_entry->SizeOfImage == 0x19A000) // Check for ntdll size of image.
+					{
+						ntdll_base = (PVOID)pldr_data_table_entry->DllBase; // Grab ntdll 32-bit base address.
+						break;
+					}
+				}
+
+				memory_order_module_list = (LIST_ENTRY32*)memory_order_module_list->Flink; // Next entry.
+
+			} while (memory_order_module_list_head != (LIST_ENTRY32*)memory_order_module_list->Flink); // Check if entries are still valid
+
+			break; // Break out of loop.
+		}
+
+		NtClose(nt_write_virtual_memory_log->GetFileHandle()); // Close logging file at end of thread.
+	}
+
+	PEB32* GetPEB32()
+	{
+		PVOID teb32 = (char*)NtCurrentTeb() + 0x2000; // Offset from TEB64 to TEB32
+		return (PEB32*)((_TEB32*)teb32)->ProcessEnvironmentBlock; // Grab PEB32 from TEB32
+	}
 
 	// Start hooks.
 	void EnableHooking()
@@ -80,6 +126,12 @@ namespace Hooks
 		   We will just leak the heap because the handles only will be closed on program close.
 		*/
 
+		thread_log = (Logging*)RtlAllocateHeap(RtlProcessHeap(), NULL, sizeof(Logging)); // Allocate heap for class instance.
+		thread_log->Setup(L"C:\\Users\\Public\\ThreadLog.txt"); // Create Logging class instance.
+		result = thread_log->CreateFileHandle(FILE_GENERIC_WRITE, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT); // Create file handle.
+		if (!NT_SUCCESS(result)) // Did CreateFileHandle succeed?
+			return result;
+
 		nt_allocate_virtual_memory_log = (Logging*)RtlAllocateHeap(RtlProcessHeap(), NULL, sizeof(Logging)); // Allocate heap for class instance.
 		nt_allocate_virtual_memory_log->Setup(L"C:\\Users\\Public\\NtAllocateVirtualMemoryLog.txt"); // Create Logging class instance.
 		result = nt_allocate_virtual_memory_log->CreateFileHandle(FILE_GENERIC_WRITE, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT); // Create file handle.
@@ -115,6 +167,12 @@ namespace Hooks
 		result = nt_query_virtual_memory_log->CreateFileHandle(FILE_GENERIC_WRITE, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT); // Create file handle.
 		if (!NT_SUCCESS(result)) // Did CreateFileHandle succeed?
 			return result;
+
+		HANDLE thread = INVALID_HANDLE_VALUE;
+
+		NTSTATUS test = NtCreateThreadEx(&thread, 0x1FFFFF, NULL, NtCurrentProcess(), (LPTHREAD_START_ROUTINE)ThreadProc, NULL, FALSE, NULL, NULL, NULL, NULL);
+
+		NtClose(thread);
 
 		return STATUS_SUCCESS; 
 	}

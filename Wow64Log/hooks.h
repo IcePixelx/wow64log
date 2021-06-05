@@ -6,6 +6,8 @@ namespace Hooks
 	void EnableHooking();
 	void DisableHooking();
 	NTSTATUS InitializeLogging(HANDLE ntdll_handle);
+	void ThreadProc();
+	PEB32* GetPEB32();
 
 	// Hook functions.
 	NTSTATUS NTAPI hkNtAllocateVirtualMemory(HANDLE ProcessHandle, PVOID* BaseAddress, ULONG_PTR ZeroBits, PSIZE_T RegionSize, ULONG AllocationType, ULONG Protect);
