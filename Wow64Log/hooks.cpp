@@ -27,6 +27,8 @@ namespace Hooks
 	decltype(NtFreeVirtualMemory)* orig_nt_free_virtual_memory = nullptr;
 	decltype(NtQueryVirtualMemory)* orig_nt_query_virtual_memory = nullptr;
 
+#pragma optimize("", off)
+
 	void __stdcall ThreadProc()
 	{
 		PEB32* peb32 = GetPEB32(); // Get PEB32.
@@ -72,10 +74,12 @@ namespace Hooks
 		NtClose(thread_log->GetFileHandle()); // Close logging file at end of thread.
 	}
 
+#pragma optimize("", on)
+
 	PEB32* GetPEB32()
 	{
-		PVOID teb32 = (char*)NtCurrentTeb() + 0x2000; // Offset from TEB64 to TEB32
-		return (PEB32*)((_TEB32*)teb32)->ProcessEnvironmentBlock; // Grab PEB32 from TEB32
+		PVOID teb32 = (char*)NtCurrentTeb() + 0x2000; // Offset from TEB64 to TEB32.
+		return (PEB32*)((_TEB32*)teb32)->ProcessEnvironmentBlock; // Grab PEB32 from TEB32.
 	}
 
 	// Start hooks.
@@ -175,11 +179,10 @@ namespace Hooks
 		if (!NT_SUCCESS(result)) // Did CreateFileHandle succeed?
 			return result;
 
-		HANDLE thread = INVALID_HANDLE_VALUE;
-
-		NTSTATUS test = NtCreateThreadEx(&thread, 0x1FFFFF, NULL, NtCurrentProcess(), (LPTHREAD_START_ROUTINE)ThreadProc, NULL, FALSE, NULL, NULL, NULL, NULL);
-
-		NtClose(thread);
+		/* PROCESS NEEDS TO BE ELEVEATED TO NTCREATETHREADEX WTF?*/
+	//	HANDLE thread;
+	//	NtCreateThreadEx(&thread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(), (LPTHREAD_START_ROUTINE)ThreadProc, NULL, FALSE, NULL, NULL, NULL, NULL);
+	//	NtClose(thread);
 
 		return STATUS_SUCCESS; 
 	}

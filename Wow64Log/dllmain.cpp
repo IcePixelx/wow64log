@@ -103,8 +103,8 @@ bool OnProcessAttach(HMODULE module)
 	if (!CheckIfWantedProcess(ntdll_handle)) // Is our wanted process?
 		return false;
 
-	if (!ExecuteX86Process(ntdll_handle)) // Launch our 32-bit process.
-		return false;
+//	if (!ExecuteX86Process(ntdll_handle)) // Launch our 32-bit process.
+//		return false;
 
 	LdrAddRefDll(LDR_ADDREF_DLL_PIN, module); // If everything succeeded make sure we can't get unloaded in any way.
 
