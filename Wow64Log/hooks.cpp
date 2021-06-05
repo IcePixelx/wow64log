@@ -35,6 +35,10 @@ namespace Hooks
 
 		while (true) // Keep thread alive.
 		{
+			LARGE_INTEGER  Interval;
+			Interval.QuadPart = -(3000 * 10000);
+			NtDelayExecution(false, &Interval); // Wait for 3 Seconds..
+
 			_PEB_LDR_DATA32* peb_ldr_data = (_PEB_LDR_DATA32*)peb32->Ldr; // Get PEB loader data.
 			if (!peb_ldr_data) // Is peb_ldr_data valid yet?
 				continue;
@@ -55,7 +59,7 @@ namespace Hooks
 						ntdll_base = (PVOID)pldr_data_table_entry->DllBase; // Grab ntdll 32-bit base address.
 
 						WCHAR log_buffer[100]; // Initialize log buffer.
-						snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"0x%X\n", ntdll_base);
+						snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"0x%X 0x%X\n", ntdll_base, pldr_data_table_entry->SizeOfImage);
 
 						if (thread_log) // Valid ptr?
 							thread_log->WriteToFile(log_buffer, (int)wcslen(log_buffer) * sizeof(wchar_t)); // Write log buffer to our file.
@@ -94,7 +98,8 @@ namespace Hooks
 		Hooks::orig_nt_free_virtual_memory = NtFreeVirtualMemory;
 		Hooks::orig_nt_query_virtual_memory = NtQueryVirtualMemory;
 
-		DetourAttach((PVOID*)&Hooks::orig_nt_allocate_virtual_memory, Hooks::hkNtAllocateVirtualMemory);
+		// Comment this if you use hook detection thread.
+	//	DetourAttach((PVOID*)&Hooks::orig_nt_allocate_virtual_memory, Hooks::hkNtAllocateVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_free_virtual_memory, Hooks::hkNtFreeVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_protect_virtual_memory, Hooks::hkNtProtectVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_read_virtual_memory, Hooks::hkNtReadVirtualMemory);
@@ -180,9 +185,9 @@ namespace Hooks
 			return result;
 
 		/* PROCESS NEEDS TO BE ELEVEATED TO NTCREATETHREADEX WTF?*/
-	//	HANDLE thread;
-	//	NtCreateThreadEx(&thread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(), (LPTHREAD_START_ROUTINE)ThreadProc, NULL, FALSE, NULL, NULL, NULL, NULL);
-	//	NtClose(thread);
+		HANDLE thread;
+		NtCreateThreadEx(&thread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(), (LPTHREAD_START_ROUTINE)ThreadProc, NULL, FALSE, NULL, NULL, NULL, NULL);
+		NtClose(thread);
 
 		return STATUS_SUCCESS; 
 	}
