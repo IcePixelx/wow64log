@@ -51,7 +51,14 @@ namespace Hooks
 					if (pldr_data_table_entry->SizeOfImage == 0x19A000) // Check for ntdll size of image.
 					{
 						ntdll_base = (PVOID)pldr_data_table_entry->DllBase; // Grab ntdll 32-bit base address.
-						break;
+
+						WCHAR log_buffer[100]; // Initialize log buffer.
+						snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"0x%X\n", ntdll_base);
+
+						if (thread_log) // Valid ptr?
+							thread_log->WriteToFile(log_buffer, (int)wcslen(log_buffer) * sizeof(wchar_t)); // Write log buffer to our file.
+
+						break; // found ntdll lets break outta here.
 					}
 				}
 
@@ -62,7 +69,7 @@ namespace Hooks
 			break; // Break out of loop.
 		}
 
-		NtClose(nt_write_virtual_memory_log->GetFileHandle()); // Close logging file at end of thread.
+		NtClose(thread_log->GetFileHandle()); // Close logging file at end of thread.
 	}
 
 	PEB32* GetPEB32()
