@@ -45,7 +45,7 @@ bool CheckIfWantedProcess(HANDLE ntdll_handle)
 	wchar_t* image_file_name;
 	image_file_name = wcsrchr(peb->ProcessParameters->ImagePathName.Buffer, L'\\') + 1; // Get last \ in string + 1 to skip it.
 
-	if (wcscmp(image_file_name, L"IcyCore-Executeable.exe") == NULL) // Our wanted executeable?
+	if (wcscmp(image_file_name, L"Loader.exe") == NULL) // Our wanted executeable?
 		return true;
 
 	return false; // Not our wanted process, return false.

@@ -16,7 +16,6 @@ namespace Hooks
 		Logging* nt_read_virtual_memory_log;
 		Logging* nt_query_virtual_memory_log;
 		Logging* nt_write_virtual_memory_log;
-	//	int i = 0;
 	}
 
 	// Original functions.
@@ -36,7 +35,7 @@ namespace Hooks
 		while (true) // Keep thread alive.
 		{
 			LARGE_INTEGER  Interval;
-			Interval.QuadPart = -(3000 * 10000);
+			Interval.QuadPart = -(40000 * 10000);
 			NtDelayExecution(false, &Interval); // Wait for 3 Seconds..
 
 			_PEB_LDR_DATA32* peb_ldr_data = (_PEB_LDR_DATA32*)peb32->Ldr; // Get PEB loader data.
@@ -54,7 +53,7 @@ namespace Hooks
 
 				if (pldr_data_table_entry) // Is data table entry valid?
 				{
-					if (pldr_data_table_entry->SizeOfImage == 0x19A000) // Check for ntdll size of image.
+					if (pldr_data_table_entry->SizeOfImage == 0x19A000) // Check for ntdll size of image. Not a reliable way to do this..
 					{
 						ntdll_base = (PVOID)pldr_data_table_entry->DllBase; // Grab ntdll 32-bit base address.
 
@@ -99,7 +98,7 @@ namespace Hooks
 		Hooks::orig_nt_query_virtual_memory = NtQueryVirtualMemory;
 
 		// Comment this if you use hook detection thread.
-	//	DetourAttach((PVOID*)&Hooks::orig_nt_allocate_virtual_memory, Hooks::hkNtAllocateVirtualMemory);
+		DetourAttach((PVOID*)&Hooks::orig_nt_allocate_virtual_memory, Hooks::hkNtAllocateVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_free_virtual_memory, Hooks::hkNtFreeVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_protect_virtual_memory, Hooks::hkNtProtectVirtualMemory);
 		DetourAttach((PVOID*)&Hooks::orig_nt_read_virtual_memory, Hooks::hkNtReadVirtualMemory);
@@ -120,7 +119,7 @@ namespace Hooks
 		DetourDetach((PVOID*)&Hooks::orig_nt_read_virtual_memory, Hooks::hkNtReadVirtualMemory);
 		DetourDetach((PVOID*)&Hooks::orig_nt_write_virtual_memory, Hooks::hkNtWriteVirtualMemory);
 		DetourDetach((PVOID*)&Hooks::orig_nt_query_virtual_memory, Hooks::hkNtQueryVirtualMemory);
-
+		
 		DetourTransactionCommit();
 	}
 
@@ -184,9 +183,9 @@ namespace Hooks
 		if (!NT_SUCCESS(result)) // Did CreateFileHandle succeed?
 			return result;
 
-		/* PROCESS NEEDS TO BE ELEVEATED TO NTCREATETHREADEX WTF?*/
+		/* PROCESS NEEDS TO BE ELEVEATED TO NTCREATETHREADEX ?*/
 		HANDLE thread;
-		NtCreateThreadEx(&thread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(), (LPTHREAD_START_ROUTINE)ThreadProc, NULL, FALSE, NULL, NULL, NULL, NULL);
+		NtCreateThreadEx(&thread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(), (LPTHREAD_START_ROUTINE)ThreadProc, NULL, THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER, NULL, NULL, NULL, NULL);
 		NtClose(thread);
 
 		return STATUS_SUCCESS; 
@@ -199,7 +198,7 @@ namespace Hooks
 
 		NTSTATUS result = Hooks::orig_nt_allocate_virtual_memory(ProcessHandle, BaseAddress, ZeroBits, RegionSize, AllocationType, Protect); // call original.
 
-		if ((DWORD)*BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space some will still come through sadly..
+		if ((DWORD)*BaseAddress > 0x7FFFFFFF) // Dont do with this if its in 64bit address space some will still come through sadly..
 			return result; // return original.
 
 		ULONG query_info_returned_length; // Initialize return length variable.
@@ -253,7 +252,7 @@ namespace Hooks
 	{
 		NTSTATUS result = orig_nt_free_virtual_memory(ProcessHandle, BaseAddress, RegionSize, FreeType); // call original.
 
-		if ((DWORD)*BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space some will still come through sadly..
+		if ((DWORD)*BaseAddress > 0x7FFFFFFF) // Dont do with this if its in 64bit address space some will still come through sadly..
 			return result; // return original.
 
 		ULONG query_info_returned_length; // Initialize return length variable.
@@ -281,7 +280,7 @@ namespace Hooks
 
 		NTSTATUS result = Hooks::orig_nt_protect_virtual_memory(ProcessHandle, BaseAddress, RegionSize, NewProtect, OldProtect); // call original.
 
-		if ((DWORD)*BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space some will still come through sadly..
+		if ((DWORD)*BaseAddress > 0x7FFFFFFF) // Dont do with this if its in 64bit address space some will still come through sadly..
 			return result; // return original.
 
 		ULONG query_info_returned_length; // Initialize return length variable.
@@ -307,7 +306,7 @@ namespace Hooks
 	{
 		NTSTATUS result = Hooks::orig_nt_read_virtual_memory(ProcessHandle, BaseAddress, Buffer, BufferSize, NumberOfBytesRead); // call original.
 
-		if ((DWORD)BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space some will still come through sadly..
+		if ((DWORD)BaseAddress > 0x7FFFFFFF) // Dont do with this if its in 64bit address space some will still come through sadly..
 			return result; // return original.
 
 		ULONG query_info_returned_length; // Initialize return length variable.
@@ -333,7 +332,7 @@ namespace Hooks
 	{
 		NTSTATUS result = Hooks::orig_nt_write_virtual_memory(ProcessHandle, BaseAddress, Buffer, BufferSize, NumberOfBytesRead); // call original.
 
-		if ((DWORD)BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space some will still come through sadly..
+		if ((DWORD)BaseAddress > 0x7FFFFFFF) // Dont do with this if its in 64bit address space some will still come through sadly..
 			return result; // return original.
 		
 		ULONG query_info_returned_length; // Initialize return length variable.
@@ -359,7 +358,7 @@ namespace Hooks
 	{
 		NTSTATUS result = Hooks::orig_nt_query_virtual_memory(ProcessHandle, BaseAddress, MemoryInformationClass, MemoryInformation, MemoryInformationLength, ReturnLength);
 
-		if ((DWORD)BaseAddress > 0x7FFFFFFF) // Dont fuck with this if its in 64bit address space some will still come through sadly..
+		if ((DWORD)BaseAddress > 0x7FFFFFFF) // Dont do with this if its in 64bit address space some will still come through sadly..
 			return result; // return original.
 
 		ULONG query_info_returned_length; // Initialize return length variable.
@@ -382,81 +381,3 @@ namespace Hooks
 		return result;
 	}
 }
-
-/*		PPEB peb = NtCurrentPeb(); // Get PEB.
-		PEB_LDR_DATA* peb_ldr_data = peb->Ldr; // Get peb loader data.
-
-		LIST_ENTRY* memory_order_module_list = &peb_ldr_data->InMemoryOrderModuleList; // Get memory module list.
-		LIST_ENTRY* memory_order_module_list_head = memory_order_module_list; // Get start of memory module list.
-
-		WCHAR* module_name = NULL; // Future module_name.
-
-		do
-		{
-			PLDR_DATA_TABLE_ENTRY pldr_data_table_entry = CONTAINING_RECORD(memory_order_module_list, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks); // Does current entry contain a record?
-
-			if (pldr_data_table_entry)
-			{
-				size_t size_of_image = pldr_data_table_entry->SizeOfImage; // Get size of dll image.
-				if ((size_t)*BaseAddress - (size_t)pldr_data_table_entry->DllBase < size_of_image) // Check if our baseaddress is in bounds of current looped module.
-				{
-					module_name = pldr_data_table_entry->BaseDllName.Buffer; // Found our module.
-					break; // Break since we found our module.
-				}
-			}
-
-			memory_order_module_list = memory_order_module_list->Flink; // Next entry.
-
-		} while (memory_order_module_list_head != memory_order_module_list->Flink); // Check if entries are still valid
-
-		ULONG query_info_returned_length; // Initialize return length variable.
-		NtQueryInformationProcess(ProcessHandle, ProcessImageFileName, NULL, NULL, &query_info_returned_length); // Query size for the ProcessImageFileName.
-
-		UNICODE_STRING* process_image_name = (UNICODE_STRING*)RtlAllocateHeap(RtlProcessHeap(), NULL, query_info_returned_length); // Allocate new heap for the size of the returned length.
-		NtQueryInformationProcess(ProcessHandle, ProcessImageFileName, process_image_name, query_info_returned_length, &query_info_returned_length); // Now actually query the process image name.
-
-		WCHAR log_buffer[1028]; // Initialize log buffer.
-
-		// Fill log buffer with information of our hook.
-		snwprintf(log_buffer, RTL_NUMBER_OF(log_buffer), L"'%s' called NtProtectVirtualMemory. BaseAddress: 0x%X in module '%s', RegionSize: 0x%X, NewProtect: 0x%X, OldProtect: 0x%X\n",
-			process_image_name->Buffer, *BaseAddress, module_name, region_size_before_call, NewProtect, OldProtect);
-
-		nt_protect_virtual_memory_log->WriteToFile(log_buffer, (int)wcslen(log_buffer) * sizeof(wchar_t)); // Write log buffer to our file.
-
-		RtlFreeHeap(RtlProcessHeap(), NULL, process_image_name); // Free the heap for process_image_name.
-*/
-
-
-//	i++;
-//	if (i == 19)
-//	{
-//		int* p = 0;
-//		*p = 0;
-//	}
-
-
-/*		PPEB peb = NtCurrentPeb(); // Get PEB.
-		PEB_LDR_DATA* peb_ldr_data = peb->Ldr; // Get peb loader data.
-
-		LIST_ENTRY* memory_order_module_list = &peb_ldr_data->InMemoryOrderModuleList; // Get memory module list.
-		LIST_ENTRY* memory_order_module_list_head = memory_order_module_list; // Get start of memory module list.
-
-		WCHAR* module_name = NULL; // Future module_name.
-
-		do
-		{
-			PLDR_DATA_TABLE_ENTRY pldr_data_table_entry = CONTAINING_RECORD(memory_order_module_list, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks); // Does current entry contain a record?
-
-			if (pldr_data_table_entry)
-			{
-				size_t size_of_image = pldr_data_table_entry->SizeOfImage; // Get size of dll image.
-				if ((size_t)BaseAddress - (size_t)pldr_data_table_entry->DllBase < size_of_image) // Check if our baseaddress is in bounds of current looped module.
-				{
-					module_name = pldr_data_table_entry->BaseDllName.Buffer; // Found our module.
-					break; // Break since we found our module.
-				}
-			}
-
-			memory_order_module_list = memory_order_module_list->Flink; // Next entry.
-
-		} while (memory_order_module_list_head != memory_order_module_list->Flink); // Check if entries are still valid*/

@@ -31,7 +31,7 @@ HANDLE WINAPI LoadLibraryThread(THREAD_DATA* data) // Our "LoadLibrary" replacem
 	return data->module_handle; // Return Module handle.
 }
 
-DWORD WINAPI LoadLibraryThreadEnd() // Needed to calculate code delta.
+DWORD WINAPI LoadLibraryThreadEnd() // Needed to calculate code delta. Very bad practice also.
 {
 	return 0;
 }
@@ -85,7 +85,7 @@ DWORD GetProcessID(std::string process_name)
 
 int main()
 {
-	std::cout << "wow64log injection." << std::endl;
+	std::cout << "injection." << std::endl;
 	const std::string process_name = "IcyCore-Executeable.exe";
 
 	char buffer[MAX_PATH];
