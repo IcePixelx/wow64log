@@ -2,18 +2,10 @@
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved)
 {
-//	PVOID* ntdll_handle = nullptr;
-
-//	UNICODE_STRING ntdll_path;
-//	RtlInitUnicodeString(&ntdll_path, (PWSTR)L"ntdll.dll"); // Init new unicode string for ntdll.dll.
-
-//	NTSTATUS wtf = LdrGetDllHandle(NULL, NULL, &ntdll_path, ntdll_handle); // Get ntdll handle.
-
 	SIZE_T allocation_size = 5;
 	PVOID pointer_reference = (PVOID)123564;
 	PVOID yes = (PVOID)656456;
 	SIZE_T test = 0;
-
 
 	switch (reason)
 	{
