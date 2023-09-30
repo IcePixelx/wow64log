@@ -3,13 +3,13 @@
 #include "defines.h"
 #pragma comment(linker,"/BASE:0x10000000")
 
-NTSTATUS init_status = STATUS_NOT_IMPLEMENTED;
+NTSTATUS wow64logInitStatus = STATUS_NOT_IMPLEMENTED;
 
 extern "C"
 {
 	_declspec(dllexport) NTSTATUS Wow64LogInitialize()
 	{
-		return init_status; // STATUS_NOT_IMPLEMENT will trigger a dll unload. STATUS_SUCCESS will let our dll stay loaded.
+		return wow64logInitStatus; // STATUS_NOT_IMPLEMENT will trigger a dll unload. STATUS_SUCCESS will let our dll stay loaded.
 	}
 
 	_declspec(dllexport) NTSTATUS Wow64LogSystemService(void* unk1)
@@ -26,67 +26,49 @@ extern "C"
 	{
 		return STATUS_SUCCESS;
 	}
+
+	// Stack failures? nahhh we don't have these here.
+	void __chkstk(size_t size)
+	{
+		return;
+	}
 }
 
-bool CheckIfWantedProcess(HANDLE ntdll_handle)
+bool CheckIfWantedProcess(HANDLE ntdllHandle)
 {
-	ANSI_STRING wcsrchr_ansi;
-	RtlInitAnsiString(&wcsrchr_ansi, (PSTR)"wcsrchr"); // Init new unicode string for wcsrchr function.
-	_wcsrchr wcsrchr; // Function template for wcsrchr.
-
-	if (!NT_SUCCESS(LdrGetProcedureAddress(ntdll_handle, &wcsrchr_ansi, NULL, (PVOID*)&wcsrchr))) // Get wcsrchr function from ntdll.dll.
-		return false; // return if it isnt STATUS_SUCCESS.
-
-	PPEB peb = NtCurrentPeb(); // Get PEB
-
-	if (!peb) // PEB valid?
-		return false;
+	PPEB peb = NtCurrentPeb();
 
 	wchar_t* image_file_name;
-	image_file_name = wcsrchr(peb->ProcessParameters->ImagePathName.Buffer, L'\\') + 1; // Get last \ in string + 1 to skip it.
+	image_file_name = wcsrchr_c(peb->ProcessParameters->ImagePathName.Buffer, L'\\') + 1; // Get last \ in string + 1 to skip it.
 
-	if (wcscmp(image_file_name, L"Loader.exe") == NULL) // Our wanted executeable?
+	if (wcscmp(image_file_name, L"Loader.exe") == NULL)
 		return true;
 
-	return false; // Not our wanted process, return false.
+	return false;
 }
 
-bool ExecuteX86Process(HANDLE ntdll_handle)
-{
-	UNICODE_STRING nt_path_name; // Initialize new NT path name.
-	PRTL_USER_PROCESS_PARAMETERS user_process_parameters; // Initialize user process parameters.
-	RTL_USER_PROCESS_INFORMATION process_info; // Initialize process_info.
-
-	const wchar_t* executable_path = L"C:\\injector.exe"; // X86 executeable path.
-
-	if (!RtlDosPathNameToNtPathName_U(executable_path, &nt_path_name, NULL, NULL)) // Convert common DOS path to NT path.
-		return false;
-
-	if (!NT_SUCCESS(RtlCreateProcessParameters(&user_process_parameters, &nt_path_name, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL))) // Create process parameters.
-		return false;
-
-	if (!NT_SUCCESS(RtlCreateUserProcess(&nt_path_name, OBJ_CASE_INSENSITIVE, user_process_parameters, NULL, NULL, NULL, FALSE, NULL, NULL, &process_info))) // Create our x86 executeable.
-		return false;
-
-	NtResumeThread(process_info.ThreadHandle, NULL);  // RtlCreateUserProcess launched our main thread as suspended so lets resume it.
-
-	NtWaitForSingleObject(process_info.ProcessHandle, FALSE, NULL); // Wait for the x86 executeable to finish executing.
-
-	NtClose(process_info.ThreadHandle); // Close thread handle.
-	NtClose(process_info.ProcessHandle); // Close process handle.
-
-	return true;
-}
-
-bool InitializeHandles(HANDLE* ntdll_handle)
+bool InitializeMisc(HANDLE* ntdllHandle)
 {
 	UNICODE_STRING ntdll_path;
-	RtlInitUnicodeString(&ntdll_path, (PWSTR)L"ntdll.dll"); // Init new unicode string for ntdll.dll.
+	RtlInitUnicodeString(&ntdll_path, (PWSTR)L"ntdll.dll");
 
-	if (!NT_SUCCESS(LdrGetDllHandle(NULL, NULL, &ntdll_path, ntdll_handle))) // Get ntdll handle.
+	if (!NT_SUCCESS(LdrGetDllHandle(NULL, NULL, &ntdll_path, ntdllHandle)))
 		return false;
 
-	if (ntdll_handle == INVALID_HANDLE_VALUE) // Is ntdll handle valid?
+	if (ntdllHandle == INVALID_HANDLE_VALUE)
+		return false;
+
+	ANSI_STRING snwprintf_ansi;
+	RtlInitAnsiString(&snwprintf_ansi, (PSTR)"_snwprintf");
+
+	if (!NT_SUCCESS(LdrGetProcedureAddress(ntdllHandle, &snwprintf_ansi, NULL, (PVOID*)&snwprintf_c)))
+		return false;
+
+	ANSI_STRING wcsrchr_ansi;
+	RtlInitAnsiString(&wcsrchr_ansi, (PSTR)"wcsrchr");
+	_wcsrchr wcsrchr;
+
+	if (!NT_SUCCESS(LdrGetProcedureAddress(ntdllHandle, &wcsrchr_ansi, NULL, (PVOID*)&wcsrchr_c)))
 		return false;
 
 	return true;
@@ -95,31 +77,31 @@ bool InitializeHandles(HANDLE* ntdll_handle)
 __declspec(noinline) /* Prevent inline for easier debugging*/
 bool OnProcessAttach(HMODULE module)
 {
-	HANDLE ntdll_handle = INVALID_HANDLE_VALUE; // Initialize ntdll handle.
+	HANDLE ntdllHandle = INVALID_HANDLE_VALUE;
 
-	if (!InitializeHandles(&ntdll_handle)) // Do handle initializing here.
+	if (!InitializeMisc(&ntdllHandle))
 		return false;
 
-	if (!CheckIfWantedProcess(ntdll_handle)) // Is our wanted process?
+	if (!CheckIfWantedProcess(ntdllHandle))
 		return false;
 
-//	if (!ExecuteX86Process(ntdll_handle)) // Launch our 32-bit process.
-//		return false;
+	// If everything succeeded make sure we can't get unloaded in any way.
+	LdrAddRefDll(LDR_ADDREF_DLL_PIN, module);
 
-	LdrAddRefDll(LDR_ADDREF_DLL_PIN, module); // If everything succeeded make sure we can't get unloaded in any way.
+	Hooks::EnableLogging();
+	Hooks::EnableHooking();
 
-	Hooks::InitializeLogging(ntdll_handle);
-	Hooks::EnableHooking(); // Hook all the functions we need!
-
-	init_status = STATUS_SUCCESS; // Tell wow64.dll Wow64LogInitialize "initialized" successfully.
+	// Tell wow64.dll Wow64LogInitialize "initialized" successfully.
+	wow64logInitStatus = STATUS_SUCCESS;
 
 	return true;
 }
 
-__declspec(noinline) /* Prevent inline for easier debugging*/
+__declspec(noinline) // Prevent inline for easier debugging
 bool OnProcessDetach(HMODULE module)
 {
-	Hooks::DisableHooking(); // Incase we somehow get unloaded prevent a crash.
+	Hooks::DisableHooking();
+	Hooks::DisableLogging();
 	return true;
 }
 
